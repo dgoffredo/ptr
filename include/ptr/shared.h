@@ -1,7 +1,6 @@
 #pragma once
 
 #include <ptr/detail/control_block.h>
-#include <ptr/detail/default_deleter.h>
 
 #include <cstddef>
 #include <memory>
@@ -73,7 +72,7 @@ Shared<Object>::Shared(std::nullptr_t)
 
 template <typename Object>
 Shared<Object>::Shared(Object *raw)
-: Shared(raw, DefaultDeleter<Object>{}) {}
+: Shared(raw, [](Object *object) {delete object;}) {}
 
 template <typename Object>
 template <typename Deleter>
