@@ -98,8 +98,8 @@ Shared<Object>::Shared(Shared<Object>&& other)
 template <typename Object>
 template <typename Managed>
 Shared<Object>::Shared(const Shared<Managed>& other, Object *alias)
-: control_block(other.control_block)
-, object(alias) {
+: object(alias)
+, control_block(other.control_block) {
   if (!control_block) {
     return;
   }
@@ -116,8 +116,8 @@ Shared<Object>::Shared(const Shared<Managed>& other, Object *alias)
 template <typename Object>
 template <typename Managed>
 Shared<Object>::Shared(Shared<Managed>&& other, Object* alias)
-: control_block(other.control_block)
-, object(alias) {
+: object(alias)
+, control_block(other.control_block) {
   if (&other == this) {
     return;
   }
