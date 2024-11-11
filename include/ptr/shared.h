@@ -22,6 +22,9 @@ class Shared {
   friend void swap(Shared<Obj>&, Shared<Obj>&);
 
   template <typename Obj>
+  friend class Shared;
+
+  template <typename Obj>
   friend class Weak;
 
  public:
@@ -86,8 +89,17 @@ Shared<Object>::Shared(Object *raw, Deleter&& deleter)
 
 template <typename Object>
 Shared<Object>::Shared(const Shared<Object>& other)
+: Shared(other, other.object) {}
+
+template <typename Object>
+Shared<Object>::Shared(Shared<Object>&& other)
+: Shared(std::move(other), other.object) {}
+
+template <typename Object>
+template <typename Managed>
+Shared<Object>::Shared(const Shared<Managed>& other, Object *alias)
 : control_block(other.control_block)
-, object(other.object) {
+, object(alias) {
   if (!control_block) {
     return;
   }
@@ -102,27 +114,15 @@ Shared<Object>::Shared(const Shared<Object>& other)
 }
 
 template <typename Object>
-Shared<Object>::Shared(Shared<Object>&& other)
-: control_block(other.control_block)
-, object(other.object) {
-  other.control_block = nullptr;
-  other.object = nullptr;
-}
-
-// TODO: other way around
-template <typename Object>
-template <typename Managed>
-Shared<Object>::Shared(const Shared<Managed>& other, Object *alias)
-: Shared(other) {
-  object = alias;
-}
-
-// TODO: other way around
-template <typename Object>
 template <typename Managed>
 Shared<Object>::Shared(Shared<Managed>&& other, Object* alias)
-: Shared(other) {
-  object = alias;
+: control_block(other.control_block)
+, object(alias) {
+  if (&other == this) {
+    return;
+  }
+  other.control_block = nullptr;
+  other.object = nullptr;
 }
 
 template <typename Object>
