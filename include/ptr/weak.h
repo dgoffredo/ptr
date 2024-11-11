@@ -1,8 +1,7 @@
 #pragma once
 
-// TODO: Maybe use different inclusion style.
-#include "detail/control_block.h"
-#include "shared.h"
+#include <ptr/detail/control_block.h>
+#include <ptr/shared.h>
 
 namespace ptr {
 

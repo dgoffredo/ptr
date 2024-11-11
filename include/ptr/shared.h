@@ -1,12 +1,10 @@
 #pragma once
 
-// TODO: Maybe use different inclusion style.
-#include "detail/control_block.h"
-#include "detail/default_deleter.h"
+#include <ptr/detail/control_block.h>
+#include <ptr/detail/default_deleter.h>
 
 #include <cstddef>
 #include <memory>
-#include <new>
 
 namespace ptr {
 
@@ -131,22 +129,9 @@ Shared<Object>::~Shared() {
     return;
   }
 
-  // Decrement the strong ref count, and possibly mark the object as destroyed.
-  std::uint64_t expected = control_block->ref_counts.load();
-  RefCounts desired;
-  do {
-    desired = RefCounts::from_word(expected);
-    --desired.strong;
-  } while (!control_block->ref_counts.compare_exchange_weak(expected, desired.as_word()));
-
-  if (desired.strong == 0) {
-    // It wasn't destroyed before, but it is now.
-    control_block->destroy();
-  }
-  if (desired.strong == 0 && desired.weak == 0) {
-    // There are no more strong or weak refs, so free the control block.
-    delete control_block;
-  }
+  // Decrement the strong ref count, possibly destroy the object, and possibly
+  // delete the control block.
+  control_block->decrement_strong();
 }
 
 template <typename Object>

@@ -29,8 +29,22 @@ struct ControlBlock {
 
   virtual ~ControlBlock() {}
 
-  // Destroy the managed object, and possibly deallocate its storage.
-  virtual void destroy() = 0;
+  // Note that `decrement_strong` might `delete this`.
+  virtual void decrement_strong() = 0;
+
+  // Note that `decrement_weak` might `delete this`.
+  void decrement_weak() {
+    std::uint64_t expected = ref_counts.load();
+    RefCounts desired;
+    do {
+      desired = RefCounts::from_word(expected);
+      --desired.weak;
+    } while (!ref_counts.compare_exchange_weak(expected, desired.as_word()));
+
+    if (desired.weak == 0 && desired.strong == 0) {
+      delete this;
+    }
+  }
 };
 
 template <typename Object>
@@ -40,11 +54,33 @@ struct InPlaceControlBlock : public ControlBlock {
   explicit InPlaceControlBlock(RefCounts counts)
   : ControlBlock(counts) {}
 
+  // Note that `decrement_strong` might `delete this`.
+  void decrement_strong() override {
+    // We must avoid a shared pointer and a weak pointer trying to destroy the
+    // object and free the control block, respectively, at the same time.
+    // The object's storage is part of the control block.
+    // To avoid destroying an object whose storage is being freed, increment
+    // the weak ref count temporarily when decrementing the strong ref count.
+    std::uint64_t expected = ref_counts.load();
+    RefCounts desired;
+    do {
+      desired = RefCounts::from_word(expected);
+      --desired.strong;
+      ++desired.weak;
+    } while (!ref_counts.compare_exchange_weak(expected, desired.as_word()));
+
+    if (desired.strong == 0) {
+      destroy_object();
+    }
+
+    decrement_weak();
+  }
+
   Object *object() {
     return std::launder(reinterpret_cast<Object*>(storage));
   }
 
-  void destroy() override {
+  void destroy_object() {
     object()->~Object();
   }
 };
@@ -65,7 +101,20 @@ struct DeletingControlBlock : public ControlBlock, public Deleter {
   , Deleter(std::forward<DeleterParam>(deleter))
   , object(object) {}
 
-  void destroy() override {
+  void decrement_strong() override {
+    std::uint64_t expected = ref_counts.load();
+    RefCounts desired;
+    do {
+      desired = RefCounts::from_word(expected);
+      --desired.strong;
+    } while (!ref_counts.compare_exchange_weak(expected, desired.as_word()));
+
+    if (desired.strong == 0) {
+      destroy_object();
+    }
+  }
+
+  void destroy_object() {
     (*this)(object);
   }
 };
