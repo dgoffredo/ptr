@@ -24,31 +24,40 @@ class Shared {
   template <typename Obj>
   friend class Weak;
 
+  template <typename Target>
+  Shared(Target*, ControlBlock*);
+
  public:
   Shared();
   Shared(std::nullptr_t);
-  explicit Shared(Object*);
-  template <typename Deleter>
-  Shared(Object*, Deleter&&);
-  Shared(const Shared&);
-  Shared(Shared&&);
-  template <typename Managed>
-  Shared(const Shared<Managed>&, Object*);
-  template <typename Managed>
-  Shared(Shared<Managed>&&, Object*);
+  template <typename Target>
+  explicit Shared(Target*);
+  template <typename Target, typename Deleter>
+  Shared(Target*, Deleter&&);
+  template <typename Other>
+  Shared(const Shared<Other>&);
+  template <typename Other>
+  Shared(Shared<Other>&&);
+  template <typename Managed, typename Alias>
+  Shared(const Shared<Managed>&, Alias*);
+  template <typename Managed, typename Alias>
+  Shared(Shared<Managed>&&, Alias*);
 
   ~Shared();
 
-  Shared& operator=(const Shared&);
-  Shared& operator=(Shared&&);
+  template <typename Other>
+  Shared& operator=(const Shared<Other>&);
+  template <typename Other>
+  Shared& operator=(Shared<Other>&&);
 
   void reset();
-  void reset(Object*);
+  template <typename Target>
+  void reset(Target*);
 
   Object& operator*() const;
   Object *operator->() const;
 
-  Shared *get() const;
+  Object *get() const;
 };
 
 template <typename Object, typename... Args>
@@ -61,6 +70,13 @@ void swap(Shared<Object>&, Shared<Object>&);
 // Implementation
 // --------------
 
+// This constructor is private, for use by `ptr::Weak::lock()`.
+template <typename Object>
+template <typename Target>
+Shared<Object>::Shared(Target *target, ControlBlock *control_block)
+: object(target)
+, control_block(control_block) {}
+
 template <typename Object>
 Shared<Object>::Shared()
 : object(nullptr)
@@ -71,30 +87,34 @@ Shared<Object>::Shared(std::nullptr_t)
 : Shared() {}
 
 template <typename Object>
-Shared<Object>::Shared(Object *raw)
+template <typename Target>
+Shared<Object>::Shared(Target *raw)
 : Shared(raw, [](Object *object) {delete object;}) {}
 
 template <typename Object>
-template <typename Deleter>
-Shared<Object>::Shared(Object *raw, Deleter&& deleter)
+template <typename Target, typename Deleter>
+Shared<Object>::Shared(Target *raw, Deleter&& deleter)
 : object(raw) {
-  control_block = new DeletingControlBlock<Object, Deleter>{
+  // TODO: Is the control block for an Object or for a Target?
+  control_block = new DeletingControlBlock<Target, Deleter>{
     RefCounts{.strong = 1, .weak = 0},
     std::forward<Deleter>(deleter),
     raw};
 }
 
 template <typename Object>
-Shared<Object>::Shared(const Shared<Object>& other)
+template <typename Other>
+Shared<Object>::Shared(const Shared<Other>& other)
 : Shared(other, other.object) {}
 
 template <typename Object>
-Shared<Object>::Shared(Shared<Object>&& other)
+template <typename Other>
+Shared<Object>::Shared(Shared<Other>&& other)
 : Shared(std::move(other), other.object) {}
 
 template <typename Object>
-template <typename Managed>
-Shared<Object>::Shared(const Shared<Managed>& other, Object *alias)
+template <typename Managed, typename Alias>
+Shared<Object>::Shared(const Shared<Managed>& other, Alias *alias)
 : object(alias)
 , control_block(other.control_block) {
   if (!control_block) {
@@ -111,8 +131,8 @@ Shared<Object>::Shared(const Shared<Managed>& other, Object *alias)
 }
 
 template <typename Object>
-template <typename Managed>
-Shared<Object>::Shared(Shared<Managed>&& other, Object* alias)
+template <typename Managed, typename Alias>
+Shared<Object>::Shared(Shared<Managed>&& other, Alias* alias)
 : object(alias)
 , control_block(other.control_block) {
   if (&other == this) {
@@ -134,7 +154,8 @@ Shared<Object>::~Shared() {
 }
 
 template <typename Object>
-Shared<Object>& Shared<Object>::operator=(const Shared<Object>& other) {
+template <typename Other>
+Shared<Object>& Shared<Object>::operator=(const Shared<Other>& other) {
   if (other.control_block == control_block) {
     object = other.object;
     return *this;
@@ -146,7 +167,8 @@ Shared<Object>& Shared<Object>::operator=(const Shared<Object>& other) {
 }
 
 template <typename Object>
-Shared<Object>& Shared<Object>::operator=(Shared<Object>&& other) {
+template <typename Other>
+Shared<Object>& Shared<Object>::operator=(Shared<Other>&& other) {
   if (&other == this) {
     return *this;
   }
@@ -162,7 +184,8 @@ void Shared<Object>::reset() {
 }
 
 template <typename Object>
-void Shared<Object>::reset(Object *raw) {
+template <typename Other>
+void Shared<Object>::reset(Other *raw) {
   *this = raw;
 }
 
@@ -177,7 +200,7 @@ Object *Shared<Object>::operator->() const {
 }
 
 template <typename Object>
-Shared<Object> *Shared<Object>::get() const {
+Object *Shared<Object>::get() const {
   return object;
 }
 

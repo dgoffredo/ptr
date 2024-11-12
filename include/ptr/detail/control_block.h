@@ -45,6 +45,15 @@ struct ControlBlock {
       delete this;
     }
   }
+
+  void increment_weak() {
+    std::uint64_t expected = ref_counts.load();
+    RefCounts desired;
+    do {
+      desired = RefCounts::from_word(expected);
+      ++desired.weak;
+    } while (!ref_counts.compare_exchange_weak(expected, desired.as_word()));
+  }
 };
 
 template <typename Object>
