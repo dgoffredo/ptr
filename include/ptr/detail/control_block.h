@@ -69,20 +69,22 @@ struct InPlaceControlBlock : public ControlBlock {
     // object and free the control block, respectively, at the same time.
     // The object's storage is part of the control block.
     // To avoid destroying an object whose storage is being freed, increment
-    // the weak ref count temporarily when decrementing the strong ref count.
+    // the weak ref count temporarily when decrementing the strong ref count,
+    // but only if the strong ref count is going to zero.
     std::uint64_t expected = ref_counts.load();
     RefCounts desired;
     do {
       desired = RefCounts::from_word(expected);
       --desired.strong;
-      ++desired.weak;
+      if (desired.strong == 0) {
+        ++desired.weak;
+      }
     } while (!ref_counts.compare_exchange_weak(expected, desired.as_word()));
 
     if (desired.strong == 0) {
       destroy_object();
+      decrement_weak();
     }
-
-    decrement_weak();
   }
 
   Object *object() {
@@ -110,6 +112,7 @@ struct DeletingControlBlock : public ControlBlock, public Deleter {
   , Deleter(std::forward<DeleterParam>(deleter))
   , object(object) {}
 
+  // Note that `decrement_strong` might `delete this`.
   void decrement_strong() override {
     std::uint64_t expected = ref_counts.load();
     RefCounts desired;
@@ -120,6 +123,9 @@ struct DeletingControlBlock : public ControlBlock, public Deleter {
 
     if (desired.strong == 0) {
       destroy_object();
+      if (desired.weak == 0) {
+        delete this;
+      }
     }
   }
 

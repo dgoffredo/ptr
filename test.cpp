@@ -31,6 +31,5 @@ int main() {
   auto s4 = w1.lock();
 
   ptr::Weak<const Wrap<std::string>> w2{w1};
-  return w2.lock()->size();
 }
 
