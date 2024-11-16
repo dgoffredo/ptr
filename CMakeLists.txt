@@ -8,7 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_library(ptr INTERFACE)
 target_include_directories(ptr INTERFACE include)
-target_compile_options(ptr INTERFACE "-Wall;-Wextra;-pedantic;-Werror;-fsanitize=address;-fsanitize=undefined")
+target_compile_options(ptr INTERFACE "-Wall;-Wextra;-pedantic;-Werror;-fno-omit-frame-pointer;-fsanitize=address;-fsanitize=undefined")
 target_link_options(ptr INTERFACE "-fsanitize=address;-fsanitize=undefined")
 
 add_executable(ptr_test test.cpp)
