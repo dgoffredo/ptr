@@ -27,6 +27,11 @@ class Shared {
   template <typename Target>
   Shared(Target*, ControlBlock*);
 
+  template <typename Other>
+  Shared& copy_assign(const Shared<Other>&);
+  template <typename Other>
+  Shared& move_assign(Shared<Other>&&);
+
  public:
   Shared();
   Shared(std::nullptr_t);
@@ -36,8 +41,10 @@ class Shared {
   Shared(Target*, Deleter&&);
   template <typename Other>
   Shared(const Shared<Other>&);
+  Shared(const Shared&);
   template <typename Other>
   Shared(Shared<Other>&&);
+  Shared(Shared&&);
   template <typename Managed, typename Alias>
   Shared(const Shared<Managed>&, Alias*);
   template <typename Managed, typename Alias>
@@ -45,6 +52,8 @@ class Shared {
 
   ~Shared();
 
+  Shared& operator=(const Shared&);
+  Shared& operator=(Shared&&);
   template <typename Other>
   Shared& operator=(const Shared<Other>&);
   template <typename Other>
@@ -108,8 +117,16 @@ Shared<Object>::Shared(const Shared<Other>& other)
 : Shared(other, other.object) {}
 
 template <typename Object>
+Shared<Object>::Shared(const Shared<Object>& other)
+: Shared(other, other.object) {}
+
+template <typename Object>
 template <typename Other>
 Shared<Object>::Shared(Shared<Other>&& other)
+: Shared(std::move(other), other.object) {}
+
+template <typename Object>
+Shared<Object>::Shared(Shared<Object>&& other)
 : Shared(std::move(other), other.object) {}
 
 template <typename Object>
@@ -155,7 +172,7 @@ Shared<Object>::~Shared() {
 
 template <typename Object>
 template <typename Other>
-Shared<Object>& Shared<Object>::operator=(const Shared<Other>& other) {
+Shared<Object>& Shared<Object>::copy_assign(const Shared<Other>& other) {
   if (other.control_block == control_block) {
     object = other.object;
     return *this;
@@ -168,7 +185,7 @@ Shared<Object>& Shared<Object>::operator=(const Shared<Other>& other) {
 
 template <typename Object>
 template <typename Other>
-Shared<Object>& Shared<Object>::operator=(Shared<Other>&& other) {
+Shared<Object>& Shared<Object>::move_assign(Shared<Other>&& other) {
   if (&other == this) {
     return *this;
   }
@@ -179,14 +196,38 @@ Shared<Object>& Shared<Object>::operator=(Shared<Other>&& other) {
 }
 
 template <typename Object>
+template <typename Other>
+Shared<Object>& Shared<Object>::operator=(Shared<Other>&& other) {
+  return move_assign(std::move(other));
+}
+
+template <typename Object>
+template <typename Other>
+Shared<Object>& Shared<Object>::operator=(const Shared<Other>& other) {
+  return copy_assign(other);
+}
+
+template <typename Object>
+Shared<Object>& Shared<Object>::operator=(Shared<Object>&& other) {
+  return move_assign(std::move(other));
+}
+
+template <typename Object>
+Shared<Object>& Shared<Object>::operator=(const Shared<Object>& other) {
+  return copy_assign(other);
+}
+
+template <typename Object>
 void Shared<Object>::reset() {
-  *this = nullptr;
+  this->~Shared();
+  new (this) Shared<Object>();
 }
 
 template <typename Object>
 template <typename Other>
 void Shared<Object>::reset(Other *raw) {
-  *this = raw;
+  this->~Shared();
+  new (this) Shared<Object>(raw);
 }
 
 template <typename Object>
